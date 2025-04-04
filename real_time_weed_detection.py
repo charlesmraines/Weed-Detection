@@ -1,31 +1,46 @@
 import depthai as dai
 import cv2
 import numpy as np
+import argparse
 import time
 from scipy.spatial import KDTree
 
+parser = argparse.ArgumentParser(description="Real-Time Weed Detection @ Mississippi State University")
+parser.add_argument('-c', '--camera', type=int, default=1, help='Camera Index (default is 1)')
+args = parser.parse_args()
+cam_idx = args.camera
+
+cam_dict = {1: "10.0.0.5", 2: "10.0.0.6"} # Add as many cameras as you want
+
 # Set which camera to use
-CAMERA_IP = "10.0.0.5"
-CAM_NAME = "Camera 1"
+CAMERA_IP = cam_dict[cam_idx]
+CAM_NAME = f"Camera {cam_idx}"
+
 
 def process_frame(image):
-    hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    lower_green = np.array([40, 60, 60])
-    upper_green = np.array([80, 220, 220])
+    #cv2.imshow(f"Test", image)
+    hsv_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    lower_green = np.array([32, 40, 30])
+    upper_green = np.array([90, 240, 240])
 
 
     mask = cv2.inRange(hsv_image, lower_green, upper_green)
+    
     segmented = cv2.bitwise_and(image, image, mask=mask)
 
     kernel = np.ones((5, 5), np.uint8)
     dilated_mask = cv2.dilate(mask, kernel, iterations=2)
     final_mask = remove_edge_connected_regions(dilated_mask)
+    #cv2.imshow(f"Test", image)
     clustered_img, clusters, bboxes = euclidean_clustering(final_mask, image=image)
+    #cv2.imshow(f"Test", clustered_img)
     return clustered_img, clusters, bboxes
 
 def preprocess(image):
+    #cv2.imshow(f"Test", image)
     image = cv2.resize(image, (512, 512))
     image = cv2.bilateralFilter(image, d=9, sigmaColor=75, sigmaSpace=75)
+    #cv2.imshow(f"Test", image)
     return image
 
 def plot(axes, images, titles):
@@ -72,12 +87,12 @@ def remove_edge_connected_regions(binary_mask):
 
 
 def euclidean_clustering(dilation_mask, distance_threshold=80, min_cluster_size=5, image=None):
-
+    #cv2.imshow(f"Test", image)
     # Find all nonzero points (white pixels)
     points = np.column_stack(np.where(dilation_mask > 0))  # (y, x) format
 
     if len(points) == 0:
-        return dilation_mask, [], []  # No clusters found
+        return image, [], []  # No clusters found
 
     # Build KD-Tree for efficient neighbor search
     tree = KDTree(points)
@@ -100,6 +115,7 @@ def euclidean_clustering(dilation_mask, distance_threshold=80, min_cluster_size=
             clusters.append(cluster)
     # Create an output image to visualize clusters
     clustered_image = image.copy()
+    #.imshow(f"Test", image)
 
     # Bounding boxes for each cluster
     bounding_boxes = []
@@ -121,7 +137,7 @@ cam_rgb.setBoardSocket(dai.CameraBoardSocket.CAM_A)
 cam_rgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
 cam_rgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.RGB)
 cam_rgb.setInterleaved(False)
-cam_rgb.setFps(6)
+cam_rgb.setFps(12)
 
 xout = pipeline.create(dai.node.XLinkOut)
 xout.setStreamName("video")
@@ -134,14 +150,19 @@ with dai.Device(pipeline, dai.DeviceInfo(CAMERA_IP)) as device:
     while True:
         in_frame = video_queue.get()
         frame = in_frame.getCvFrame()
+        #print(f"Frame shape: {frame.shape}")
+        #print(f"Image is Black 1: {np.any(frame)}")
+        #cv2.imshow(f"Test", frame)
 
         start_time = time.time()
 
         preprocessed_img = preprocess(frame)
         output, _, _ = process_frame(preprocessed_img)
+        #print(f"output shape: {output.shape}")
+        #print(f"Image is Black 2: {np.any(frame)}")
 
         elapsed_time = (time.time() - start_time) * 1000  # ms
-        cv2.imshow(f"{CAM_NAME} - CPU Dilation", output)
+        cv2.imshow(f"Real Time Weed Detection - {CAM_NAME}", output)
         print(f"{CAM_NAME} - CPU Dilation Time: {elapsed_time:.2f} ms")
 
 
