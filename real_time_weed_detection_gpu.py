@@ -6,17 +6,23 @@ import queue
 import time
 
 # Camera IPs
-CAMERA_1_IP = "10.0.0.5"
-CAMERA_2_IP = "10.0.0.6"
+CAMERA_1_IP = "192.168.1.100"
+CAMERA_2_IP = "192.168.1.101"
 
 # Shared queue for frame processing
 frame_queue = queue.Queue()
 
-# CPU Dilation (replaces cv2.cuda.dilate)
-def apply_cpu_dilation(image):
+# CUDA Kernel (cv2.cuda) for Dilation
+def apply_cuda_dilation(image):
+    gpu_mat = cv2.cuda_GpuMat()
+    gpu_mat.upload(image)
+
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-    dilated = cv2.dilate(image, kernel, iterations=1)
-    return dilated
+    gpu_kernel = cv2.cuda_GpuMat()
+    gpu_kernel.upload(kernel)
+
+    dilated_gpu = cv2.cuda.dilate(gpu_mat, gpu_kernel)
+    return dilated_gpu.download()  # Bring result back to CPU
 
 # Camera Capture Thread
 def capture_camera(ip, queue, cam_name):
@@ -42,20 +48,17 @@ def capture_camera(ip, queue, cam_name):
             if cv2.waitKey(1) == ord('q'):
                 break
 
-# Frame Processing Thread
+# CUDA Processing Thread
 def process_frames(queue):
     while True:
         if not queue.empty():
             cam_name, frame = queue.get()
 
             start_time = time.time()
+            processed_frame = apply_cuda_dilation(frame)
+            elapsed_time = (time.time() - start_time) * 1000  # Convert to ms
 
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            processed_frame = apply_cpu_dilation(gray)
-
-            elapsed_time = (time.time() - start_time) * 1000  # ms
-
-            cv2.imshow(f"{cam_name} - CPU Dilation - {elapsed_time:.2f} ms", processed_frame)
+            cv2.imshow(f"{cam_name} - Processed (CUDA Dilation) - {elapsed_time:.2f} ms", processed_frame)
 
         if cv2.waitKey(1) == ord('q'):
             break
