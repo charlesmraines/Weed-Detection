@@ -53,19 +53,6 @@ def remove_edge_connected_regions(binary_mask):
 
 
 def euclidean_clustering(dilation_mask, distance_threshold=80, min_cluster_size=5, image=None):
-    """
-    Perform Euclidean clustering on a binary dilation mask.
-
-    Parameters:
-    - dilation_mask: Binary image where white pixels represent detected objects.
-    - distance_threshold: Maximum Euclidean distance between points in the same cluster.
-    - min_cluster_size: Minimum number of pixels required to form a valid cluster.
-
-    Returns:
-    - clustered_image: Image with clusters marked.
-    - clusters: List of clusters, where each cluster is a list of pixel coordinates.
-    - bounding_boxes: List of bounding boxes [(x, y, w, h)] for each cluster.
-    """
 
     # Find all nonzero points (white pixels)
     points = np.column_stack(np.where(dilation_mask > 0))  # (y, x) format
