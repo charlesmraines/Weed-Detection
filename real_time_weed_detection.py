@@ -4,6 +4,7 @@ import numpy as np
 import argparse
 import time
 from scipy.spatial import KDTree
+import os
 
 parser = argparse.ArgumentParser(description="Real-Time Weed Detection @ Mississippi State University")
 parser.add_argument('-c', '--camera', type=int, default=1, help='Camera Index (default is 1)')
@@ -11,6 +12,11 @@ args = parser.parse_args()
 cam_idx = args.camera
 
 cam_dict = {1: "10.0.0.5", 2: "10.0.0.6"} # Add as many cameras as you want
+
+# Capture Frames
+capture_dir = f"cam{cam_idx}_fast_dir"
+os.makedirs(capture_dir, exist_ok=True)
+frame_num = 0
 
 # Set which camera to use
 CAMERA_IP = cam_dict[cam_idx]
@@ -20,8 +26,8 @@ CAM_NAME = f"Camera {cam_idx}"
 def process_frame(image):
     #cv2.imshow(f"Test", image)
     hsv_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-    lower_green = np.array([32, 40, 30])
-    upper_green = np.array([90, 240, 240])
+    lower_green = np.array([35, 80, 60])
+    upper_green = np.array([85, 255, 220])
 
 
     mask = cv2.inRange(hsv_image, lower_green, upper_green)
@@ -150,6 +156,10 @@ with dai.Device(pipeline, dai.DeviceInfo(CAMERA_IP)) as device:
     while True:
         in_frame = video_queue.get()
         frame = in_frame.getCvFrame()
+        if frame_num % 5 == 0:
+        	save_dir = os.path.join(capture_dir, f"frame{frame_num}.jpg")
+        	cv2.imwrite(save_dir, frame)
+        frame_num += 1
         #print(f"Frame shape: {frame.shape}")
         #print(f"Image is Black 1: {np.any(frame)}")
         #cv2.imshow(f"Test", frame)
