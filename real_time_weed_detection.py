@@ -2,9 +2,11 @@ import depthai as dai
 import cv2
 import numpy as np
 import argparse
+import Jetson.GPIO as GPIO
 import time
 from scipy.spatial import KDTree
 import os
+
 
 parser = argparse.ArgumentParser(description="Real-Time Weed Detection @ Mississippi State University")
 parser.add_argument('-c', '--camera', type=int, default=1, help='Camera Index (default is 1)')
@@ -12,6 +14,7 @@ args = parser.parse_args()
 cam_idx = args.camera
 
 cam_dict = {1: "10.0.0.5", 2: "10.0.0.6"} # Add as many cameras as you want
+pin_dict = {1: 16, 2: 32}
 
 # Capture Frames
 capture_dir = f"cam{cam_idx}_fast_dir"
@@ -21,6 +24,15 @@ frame_num = 0
 # Set which camera to use
 CAMERA_IP = cam_dict[cam_idx]
 CAM_NAME = f"Camera {cam_idx}"
+
+# GPIO Pin Setup
+yes_pin = pin_dict[cam_idx]
+trigger_state = False
+print(f"Pin: {yes_pin}")
+
+GPIO.setmode(GPIO.BOARD)
+GPIO.setup(yes_pin, GPIO.OUT)
+GPIO.setwarnings(False)
 
 
 def process_frame(image):
@@ -167,13 +179,25 @@ with dai.Device(pipeline, dai.DeviceInfo(CAMERA_IP)) as device:
         start_time = time.time()
 
         preprocessed_img = preprocess(frame)
-        output, _, _ = process_frame(preprocessed_img)
+        output, clusters, _ = process_frame(preprocessed_img)
         #print(f"output shape: {output.shape}")
         #print(f"Image is Black 2: {np.any(frame)}")
 
         elapsed_time = (time.time() - start_time) * 1000  # ms
+        
+        if len(clusters) > 0:
+        	if not trigger_state:
+        		print(f"Weed Detected: Triggering Pin {yes_pin}")
+        		GPIO.output(yes_pin, GPIO.HIGH)
+        		trigger_state = not trigger_state
+        else:
+        	if trigger_state:
+        		GPIO.output(yes_pin, GPIO.LOW)
+        		trigger_state = not trigger_state
+        
         cv2.imshow(f"Real Time Weed Detection - {CAM_NAME}", output)
-        print(f"{CAM_NAME} - CPU Dilation Time: {elapsed_time:.2f} ms")
+        state = GPIO.input(yes_pin)
+        print(f"{CAM_NAME} - CPU Dilation Time: {elapsed_time:.2f} ms  -  Pin {yes_pin}: {'HIGH' if state else 'LOW'} - Internal State: {trigger_state}")
 
 
 
@@ -181,4 +205,4 @@ with dai.Device(pipeline, dai.DeviceInfo(CAMERA_IP)) as device:
             break
 
 cv2.destroyAllWindows()
-
+GPIO.cleanup()
